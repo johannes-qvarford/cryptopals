@@ -2,71 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 const ArrayList = std.ArrayList;
 
-const ConversionError = error{CharIsNotNib};
-
-fn hex_char_to_nib(char: u8) anyerror!u8 {
-    return try switch (char) {
-        '0'...'9' => char - '0',
-        'a'...'f' => (char - 'a') + ((9 - 0) + 1),
-        'A'...'F' => (char - 'A') + ((9 - 0) + 1),
-        else => blk: {
-            break :blk error.ConversionError;
-        },
-    };
-}
-
-test "hex_char_to_nib converts to correct nib" {
-    try std.testing.expectEqual(hex_char_to_nib('0'), 0);
-    try std.testing.expectEqual(hex_char_to_nib('9'), 9);
-    try std.testing.expectEqual(hex_char_to_nib('a'), 0xa);
-    try std.testing.expectEqual(hex_char_to_nib('f'), 0xf);
-    try std.testing.expectEqual(hex_char_to_nib('A'), 0xA);
-    try std.testing.expectEqual(hex_char_to_nib('F'), 0xF);
-    try std.testing.expectEqual(hex_char_to_nib('g'), error.ConversionError);
-}
-
-fn hex_pairs_to_bytes(allocator: std.mem.Allocator, pairs: []const u8) ![]const u8 {
-    _ = try std.math.divExact(usize, pairs.len, 2);
-
-    const bytes = try allocator.alloc(u8, pairs.len / 2);
-    errdefer {
-        allocator.free(bytes);
-    }
-
-    for (0..bytes.len) |i| {
-        const first_i: u8 = @intCast(i * 2);
-        const second_i = first_i + 1;
-
-        const high_char = pairs[first_i];
-        const low_char = pairs[second_i];
-
-        const high_nib = try hex_char_to_nib(high_char);
-        const low_nib = try hex_char_to_nib(low_char);
-
-        bytes[i] = (high_nib << 4) + low_nib;
-    }
-
-    return bytes;
-}
-
-test "hex_pairs_to_bytes converts to correct nib" {
-    const S = struct {
-        fn test_hex_pairs_to_bytes(allocator: std.mem.Allocator, expected: []const u8, pairs: []const u8) !void {
-            const a = try hex_pairs_to_bytes(allocator, pairs);
-            defer {
-                allocator.free(a);
-            }
-            try std.testing.expectEqualSlices(u8, expected, a);
-        }
-    };
-
-    const allocator = std.testing.allocator;
-
-    try S.test_hex_pairs_to_bytes(allocator, &([1]u8{0x0}), "00"[0..]);
-    try S.test_hex_pairs_to_bytes(allocator, &([1]u8{0x82}), "82"[0..]);
-    try S.test_hex_pairs_to_bytes(allocator, &([1]u8{0xFF}), "FF"[0..]);
-    try S.test_hex_pairs_to_bytes(allocator, &([3]u8{ 0x77, 0x12, 0x34 }), "771234"[0..]);
-}
+const hex = @import("./hex.zig");
 
 fn bytes_to_base64(allocator: std.mem.Allocator, bytes: []const u8) !ArrayList(u8) {
     const S = struct {
@@ -123,7 +59,8 @@ fn bytes_to_base64(allocator: std.mem.Allocator, bytes: []const u8) !ArrayList(u
 
 test "bytes_to_base64 converts to base64" {
     const S = struct {
-        fn test_bytes_to_base64(allocator: std.mem.Allocator, expected: []const u8, bytes: []const u8) !void {
+        const allocator = std.testing.allocator;
+        fn t(expected: []const u8, bytes: []const u8) !void {
             const a = try bytes_to_base64(allocator, bytes);
             defer {
                 a.deinit();
@@ -133,25 +70,23 @@ test "bytes_to_base64 converts to base64" {
         }
     };
 
-    const allocator = std.testing.allocator;
-
-    try S.test_bytes_to_base64(allocator, "AA", &[1]u8{0x00});
-    try S.test_bytes_to_base64(allocator, "BA", &[1]u8{0x04});
-    try S.test_bytes_to_base64(allocator, "AAAA", &[3]u8{ 0x00, 0x00, 0x00 });
-    try S.test_bytes_to_base64(allocator, "BAAA", &[3]u8{ 0x04, 0x00, 0x00 });
-    try S.test_bytes_to_base64(allocator, "CAAA", &[3]u8{ 0x08, 0x00, 0x00 });
-    try S.test_bytes_to_base64(allocator, "aAAA", &[3]u8{ 0x68, 0x00, 0x00 });
-    try S.test_bytes_to_base64(allocator, "zAAA", &[3]u8{ 0xcc, 0x00, 0x00 });
-    try S.test_bytes_to_base64(allocator, "0AAA", &[3]u8{ 0xd0, 0x00, 0x00 });
-    try S.test_bytes_to_base64(allocator, "9AAA", &[3]u8{ 0xf4, 0x00, 0x00 });
-    try S.test_bytes_to_base64(allocator, "+AAA", &[3]u8{ 0xf8, 0x00, 0x00 });
-    try S.test_bytes_to_base64(allocator, "/AAA", &[3]u8{ 0xfc, 0x00, 0x00 });
-    try S.test_bytes_to_base64(allocator, "/AAA", &[3]u8{ 0xfc, 0x00, 0x00 });
-    try S.test_bytes_to_base64(allocator, "TWFueSBoYW5kcyBtYWtlIGxpZ2h0IHdvcmsu", "Many hands make light work.");
+    try S.t("AA", &[1]u8{0x00});
+    try S.t("BA", &[1]u8{0x04});
+    try S.t("AAAA", &[3]u8{ 0x00, 0x00, 0x00 });
+    try S.t("BAAA", &[3]u8{ 0x04, 0x00, 0x00 });
+    try S.t("CAAA", &[3]u8{ 0x08, 0x00, 0x00 });
+    try S.t("aAAA", &[3]u8{ 0x68, 0x00, 0x00 });
+    try S.t("zAAA", &[3]u8{ 0xcc, 0x00, 0x00 });
+    try S.t("0AAA", &[3]u8{ 0xd0, 0x00, 0x00 });
+    try S.t("9AAA", &[3]u8{ 0xf4, 0x00, 0x00 });
+    try S.t("+AAA", &[3]u8{ 0xf8, 0x00, 0x00 });
+    try S.t("/AAA", &[3]u8{ 0xfc, 0x00, 0x00 });
+    try S.t("/AAA", &[3]u8{ 0xfc, 0x00, 0x00 });
+    try S.t("TWFueSBoYW5kcyBtYWtlIGxpZ2h0IHdvcmsu", "Many hands make light work.");
 }
 
 pub fn hex_ascii_to_base64(allocator: std.mem.Allocator, hex_ascii: []const u8) !ArrayList(u8) {
-    const bytes = try hex_pairs_to_bytes(allocator, hex_ascii);
+    const bytes = try hex.hex_to_bytes(allocator, hex_ascii);
     defer {
         allocator.free(bytes);
     }
