@@ -63,3 +63,54 @@ test "hex_to_bytes converts to correct nib" {
     try S.t(&([1]u8{0xFF}), "FF"[0..]);
     try S.t(&([3]u8{ 0x77, 0x12, 0x34 }), "771234"[0..]);
 }
+
+fn nib_to_hex_char(nib: u4) u8 {
+    return switch (nib) {
+        0...9 => @as(u8, '0') + nib,
+        0xa...0xf => @as(u8, 'a') + (nib - 0xa),
+    };
+}
+
+test "nib_to_hex_char converts to correct nib" {
+    try std.testing.expectEqual(nib_to_hex_char(0), '0');
+    try std.testing.expectEqual(nib_to_hex_char(9), '9');
+    try std.testing.expectEqual(nib_to_hex_char(0xa), 'a');
+    try std.testing.expectEqual(nib_to_hex_char(0xf), 'f');
+    try std.testing.expectEqual(nib_to_hex_char(0xA), 'a');
+    try std.testing.expectEqual(nib_to_hex_char(0xF), 'f');
+}
+
+pub fn bytes_to_hex(allocator: std.mem.Allocator, bytes: []const u8) ![]const u8 {
+    const hex = try allocator.alloc(u8, bytes.len * 2);
+    errdefer {
+        allocator.free(hex);
+    }
+
+    for (bytes, 0..) |byte, i| {
+        const high_nib: u4 = @intCast(byte >> 4);
+        const low_nib: u4 = @intCast(byte & 0b0000_1111);
+
+        const high_char = nib_to_hex_char(high_nib);
+        const low_char = nib_to_hex_char(low_nib);
+
+        hex[(i * 2)] = high_char;
+        hex[(i * 2) + 1] = low_char;
+    }
+
+    return hex;
+}
+
+test "bytes_to_hex works" {
+    const S = struct {
+        const allocator = std.testing.allocator;
+        fn t(expected: []const u8, bytes: []const u8) !void {
+            const a = try bytes_to_hex(allocator, bytes);
+            defer {
+                allocator.free(a);
+            }
+            try std.testing.expectEqualSlices(u8, expected, a);
+        }
+    };
+
+    try S.t(&[2]u8{ 'f', 'a' }, &[1]u8{0xfa});
+}
