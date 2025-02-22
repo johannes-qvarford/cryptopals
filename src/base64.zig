@@ -10,7 +10,6 @@ fn hex_char_to_nib(char: u8) anyerror!u8 {
         'a'...'f' => (char - 'a') + ((9 - 0) + 1),
         'A'...'F' => (char - 'A') + ((9 - 0) + 1),
         else => blk: {
-            std.log.warn("\nIncorrect char {X}\n", .{char});
             break :blk error.ConversionError;
         },
     };
@@ -37,8 +36,6 @@ fn hex_pairs_to_bytes(allocator: std.mem.Allocator, pairs: []const u8) ![]const 
     for (0..bytes.len) |i| {
         const first_i: u8 = @intCast(i * 2);
         const second_i = first_i + 1;
-
-        //std.log.warn("\nIncorrect char {X} and {X} for i={}\n", .{ first_char, second_char, i });
 
         const high_char = pairs[first_i];
         const low_char = pairs[second_i];
