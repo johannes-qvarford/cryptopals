@@ -22,7 +22,7 @@ test "hex_char_to_nib converts to correct nib" {
     try std.testing.expectEqual(hex_char_to_nib('g'), error.ConversionError);
 }
 
-pub fn hex_to_bytes(allocator: std.mem.Allocator, pairs: []const u8) ![]const u8 {
+pub fn hex_to_bytes(allocator: std.mem.Allocator, pairs: []const u8) ![]u8 {
     _ = try std.math.divExact(usize, pairs.len, 2);
 
     const bytes = try allocator.alloc(u8, pairs.len / 2);
